@@ -144,9 +144,48 @@ fun HomeScreen(viewModel: MainViewModel) {
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Bienvenido a tu plataforma didáctica de 3.º Básico. Explora tus materias o actualiza tu ficha de estudio.",
+                                text = "Bienvenido a tu plataforma didáctica de 3.º Básico. Explora las 4 materias oficiales autorizadas por UTP.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Validación Curricular Primer Ciclo",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF1E293B)
+                                )
+                                Surface(
+                                    color = Color(0xFFDCFCE7),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text(
+                                        text = "Aprobado UTP",
+                                        color = Color(0xFF166534),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "4 asignaturas troncales articuladas bajo OA oficiales del Currículum Nacional. Unidad 1 lista para reforzamiento.",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B)
                             )
                         }
                     }
@@ -190,7 +229,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Modo Repaso Guiado", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("Configuración persistente en DataStore", color = Color.Gray, fontSize = 13.sp)
+                                Text("Ajuste adaptativo y persistencia DataStore", color = Color.Gray, fontSize = 13.sp)
                             }
                             Text("➔", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
@@ -208,8 +247,8 @@ fun HomeScreen(viewModel: MainViewModel) {
                             Text(text = "📝", fontSize = 32.sp)
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Ficha del Alumno", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("Formulario de registro y credencial", color = Color.Gray, fontSize = 13.sp)
+                                Text("Ficha y Credencial del Alumno", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("Formulario validado y seguimiento pedagógico", color = Color.Gray, fontSize = 13.sp)
                             }
                             Text("➔", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
@@ -227,8 +266,8 @@ fun HomeScreen(viewModel: MainViewModel) {
                             Text(text = "📷", fontSize = 32.sp)
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Credencial Escolar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("Toma tu foto con la cámara nativa", color = Color.Gray, fontSize = 13.sp)
+                                Text("Credencial Fotográfica", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("Cámara nativa y selección desde galería", color = Color.Gray, fontSize = 13.sp)
                             }
                             Text("➔", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }

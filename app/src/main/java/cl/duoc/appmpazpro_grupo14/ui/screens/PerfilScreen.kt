@@ -1,6 +1,9 @@
 package cl.duoc.appmpazpro_grupo14.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -15,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import cl.duoc.appmpazpro_grupo14.navigation.Screen
 import cl.duoc.appmpazpro_grupo14.ui.components.ImagenInteligente
@@ -32,11 +36,47 @@ fun PerfilScreen(
     val imagenUri by perfilViewModel.imagenUri.collectAsState()
     var uriTemporal by remember { mutableStateOf<Uri?>(null) }
 
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { exito ->
-        if (exito) uriTemporal?.let { perfilViewModel.actualizarImagen(it) }
+    // 1. Launcher para la captura de foto
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { exitoso ->
+        if (exitoso) {
+            uriTemporal?.let { uri ->
+                perfilViewModel.actualizarImagen(uri)
+            }
+        }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    fun lanzarCamara() {
+        try {
+            val directorioImagenes = File(context.cacheDir, "mis_imagenes").apply { mkdirs() }
+            val archivoTemporal = File.createTempFile("foto_perfil_", ".jpg", directorioImagenes)
+
+            val uri = FileProvider.getUriForFile(
+                context,
+                "cl.duoc.appmpazpro_grupo14.fileprovider",
+                archivoTemporal
+            )
+            uriTemporal = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Error al preparar la cámara: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { fueConcedido ->
+        if (fueConcedido) {
+            lanzarCamara()
+        } else {
+            Toast.makeText(context, "Se necesita permiso de cámara para la credencial escolar", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
         uri?.let { perfilViewModel.actualizarImagen(it) }
     }
 
@@ -87,13 +127,16 @@ fun PerfilScreen(
 
                 Button(
                     onClick = {
-                        val archivoTemporal = File.createTempFile("foto_perfil_", ".jpg", context.cacheDir)
-                        uriTemporal = FileProvider.getUriForFile(
+                        val tienePermiso = ContextCompat.checkSelfPermission(
                             context,
-                            "cl.duoc.appmpazpro_grupo14.fileprovider",
-                            archivoTemporal
-                        )
-                        cameraLauncher.launch(uriTemporal!!)
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (tienePermiso) {
+                            lanzarCamara()
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
