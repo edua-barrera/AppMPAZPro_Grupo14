@@ -60,7 +60,10 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(viewModel = mainViewModel)
                         }
                         composable(Screen.Asignaturas.route) {
-                            AsignaturasScreen(viewModel = mainViewModel)
+                            AsignaturasScreen(
+                                viewModel = mainViewModel,
+                                estadoViewModel = estadoViewModel
+                            )
                         }
                         composable(Screen.Registro.route) {
                             RegistroScreen(usuarioViewModel = usuarioViewModel, mainViewModel = mainViewModel)
