@@ -7,8 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -18,13 +17,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cl.duoc.appmpazpro_grupo14.navigation.Screen
 import cl.duoc.appmpazpro_grupo14.viewmodel.MainViewModel
+import cl.duoc.appmpazpro_grupo14.viewmodel.UsuarioViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: MainViewModel) {
+fun HomeScreen(
+    viewModel: MainViewModel,
+    usuarioViewModel: UsuarioViewModel
+) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val sesionActiva by usuarioViewModel.sesionActiva.collectAsState()
+    val estadoUsuario by usuarioViewModel.estado.collectAsState()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -67,9 +72,17 @@ fun HomeScreen(viewModel: MainViewModel) {
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
                 NavigationDrawerItem(
-                    label = { Text("📝  Registro Estudiante", fontWeight = FontWeight.Medium) },
+                    label = {
+                        Text(
+                            if (sesionActiva) "🎓  Mi Credencial y Bitácora" else "🔐  Iniciar Sesión / Registro",
+                            fontWeight = FontWeight.Medium
+                        )
+                    },
                     selected = false,
-                    onClick = { scope.launch { drawerState.close() }; viewModel.navigateTo(Screen.Registro) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        viewModel.navigateTo(if (sesionActiva) Screen.Resumen else Screen.Registro)
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
                 NavigationDrawerItem(
@@ -136,8 +149,13 @@ fun HomeScreen(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
+                            val nombreSaludo = if (sesionActiva && estadoUsuario.nombre.isNotBlank()) {
+                                estadoUsuario.nombre.split(" ").first()
+                            } else {
+                                "Estudiante"
+                            }
                             Text(
-                                text = "¡Hola, Estudiante! 👋",
+                                text = "¡Hola, $nombreSaludo! 👋",
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -236,7 +254,9 @@ fun HomeScreen(viewModel: MainViewModel) {
                     }
 
                     ElevatedCard(
-                        onClick = { viewModel.navigateTo(Screen.Registro) },
+                        onClick = {
+                            viewModel.navigateTo(if (sesionActiva) Screen.Resumen else Screen.Registro)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
                     ) {
@@ -244,11 +264,19 @@ fun HomeScreen(viewModel: MainViewModel) {
                             modifier = Modifier.padding(18.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "📝", fontSize = 32.sp)
+                            Text(text = if (sesionActiva) "🎓" else "🔐", fontSize = 32.sp)
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Ficha y Credencial del Alumno", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text("Formulario validado y seguimiento pedagógico", color = Color.Gray, fontSize = 13.sp)
+                                Text(
+                                    if (sesionActiva) "Mi Credencial y Bitácora" else "Iniciar Sesión / Registrarse",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    if (sesionActiva) "Ver ficha escolar, bitácora SQLite y cerrar sesión" else "Accede a tu cuenta o crea tu ficha escolar",
+                                    color = Color.Gray,
+                                    fontSize = 13.sp
+                                )
                             }
                             Text("➔", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }

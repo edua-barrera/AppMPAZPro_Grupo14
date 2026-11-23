@@ -57,12 +57,16 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Home.route) {
-                            HomeScreen(viewModel = mainViewModel)
+                            HomeScreen(
+                                viewModel = mainViewModel,
+                                usuarioViewModel = usuarioViewModel
+                            )
                         }
                         composable(Screen.Asignaturas.route) {
                             AsignaturasScreen(
                                 viewModel = mainViewModel,
-                                estadoViewModel = estadoViewModel
+                                estadoViewModel = estadoViewModel,
+                                usuarioViewModel = usuarioViewModel
                             )
                         }
                         composable(Screen.Registro.route) {

@@ -21,9 +21,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cl.duoc.appmpazpro_grupo14.data.remote.PokemonRecompensaUi
+import cl.duoc.appmpazpro_grupo14.data.remote.PokemonRepository
 import cl.duoc.appmpazpro_grupo14.navigation.Screen
 import cl.duoc.appmpazpro_grupo14.viewmodel.EstadoViewModel
 import cl.duoc.appmpazpro_grupo14.viewmodel.MainViewModel
+import cl.duoc.appmpazpro_grupo14.viewmodel.UsuarioViewModel
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 
 data class ObjetivoAprendizaje(
     val codigo: String,
@@ -53,9 +58,12 @@ data class AsignaturaItem(
 @Composable
 fun AsignaturasScreen(
     viewModel: MainViewModel,
-    estadoViewModel: EstadoViewModel
+    estadoViewModel: EstadoViewModel,
+    usuarioViewModel: UsuarioViewModel
 ) {
     val modoRepasoActivo by estadoViewModel.activo.collectAsState()
+    val scope = rememberCoroutineScope()
+    val pokemonRepository = remember { PokemonRepository() }
 
     val asignaturas = remember {
         listOf(
@@ -158,6 +166,10 @@ fun AsignaturasScreen(
     var opcionSeleccionada by remember { mutableStateOf<Int?>(null) }
     var retroalimentacionVisible by remember { mutableStateOf(false) }
 
+    var cargandoPokemon by remember { mutableStateOf(false) }
+    var pokemonGanado by remember { mutableStateOf<PokemonRecompensaUi?>(null) }
+    var errorPokemon by remember { mutableStateOf<String?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -209,7 +221,7 @@ fun AsignaturasScreen(
                         color = Color(0xFF1E293B)
                     )
                     Text(
-                        text = "Plan curricular autorizado para 3.º Básico - Escuela Marcela Paz. Toca una asignatura para ver su contenido y resolver el desafío didáctico.",
+                        text = "Plan curricular autorizado para 3.º Básico - Escuela Marcela Paz. Resuelve cada desafío para desbloquear un compañero Pokédex.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF64748B)
                     )
@@ -224,6 +236,8 @@ fun AsignaturasScreen(
                                 asignaturaSeleccionada = item
                                 opcionSeleccionada = null
                                 retroalimentacionVisible = false
+                                pokemonGanado = null
+                                errorPokemon = null
                             },
                         colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
@@ -276,7 +290,7 @@ fun AsignaturasScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth(0.92f)
-                            .fillMaxHeight(0.85f),
+                            .fillMaxHeight(0.88f),
                         shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp)
@@ -405,7 +419,6 @@ fun AsignaturasScreen(
                                     color = Color(0xFF1E293B)
                                 )
 
-                                // Alternativas
                                 asig.desafio.opciones.forEachIndexed { indice, opcion ->
                                     val esSeleccionada = opcionSeleccionada == indice
                                     val esCorrecta = indice == asig.desafio.respuestaCorrecta
@@ -428,8 +441,48 @@ fun AsignaturasScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
+                                                val yaRespondioBien = retroalimentacionVisible && opcionSeleccionada == asig.desafio.respuestaCorrecta
                                                 opcionSeleccionada = indice
                                                 retroalimentacionVisible = true
+                                                val acierto = indice == asig.desafio.respuestaCorrecta
+                                                val oaPrincipal = asig.objetivos.firstOrNull()?.codigo ?: "OA 1"
+
+                                                if (acierto && !yaRespondioBien) {
+                                                    cargandoPokemon = true
+                                                    errorPokemon = null
+                                                    scope.launch {
+                                                        val resultado = pokemonRepository.obtenerRecompensaAleatoria()
+                                                        cargandoPokemon = false
+                                                        resultado.onSuccess { poke ->
+                                                            pokemonGanado = poke
+                                                            usuarioViewModel.registrarProgreso(
+                                                                asignatura = asig.nombre,
+                                                                codigoOa = oaPrincipal,
+                                                                acertado = true,
+                                                                usoModoRepaso = modoRepasoActivo == true,
+                                                                pokemonRecompensa = "${poke.numeroPokedex} ${poke.nombre}",
+                                                                observacionDocente = "Logrado con recompensa Pokédex"
+                                                            )
+                                                        }.onFailure {
+                                                            errorPokemon = "Sin conexión a PokéAPI (avance guardado localmente)"
+                                                            usuarioViewModel.registrarProgreso(
+                                                                asignatura = asig.nombre,
+                                                                codigoOa = oaPrincipal,
+                                                                acertado = true,
+                                                                usoModoRepaso = modoRepasoActivo == true
+                                                            )
+                                                        }
+                                                    }
+                                                } else if (!acierto) {
+                                                    pokemonGanado = null
+                                                    usuarioViewModel.registrarProgreso(
+                                                        asignatura = asig.nombre,
+                                                        codigoOa = oaPrincipal,
+                                                        acertado = false,
+                                                        usoModoRepaso = modoRepasoActivo == true,
+                                                        observacionDocente = "Requiere reforzamiento en OA"
+                                                    )
+                                                }
                                             },
                                         shape = RoundedCornerShape(8.dp),
                                         colors = CardDefaults.cardColors(containerColor = colorFondo),
@@ -476,6 +529,68 @@ fun AsignaturasScreen(
                                             modifier = Modifier.padding(12.dp),
                                             lineHeight = 16.sp
                                         )
+                                    }
+                                }
+
+                                if (cargandoPokemon) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("Buscando compañero Pokédex...", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+
+                                errorPokemon?.let { err ->
+                                    Text(text = err, fontSize = 12.sp, color = Color.Gray)
+                                }
+
+                                pokemonGanado?.let { poke ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                                        border = BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "🏆 ¡Compañero Pokédex Desbloqueado!",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = Color(0xFF1D4ED8)
+                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                AsyncImage(
+                                                    model = poke.imagenUrl,
+                                                    contentDescription = poke.nombre,
+                                                    modifier = Modifier.size(84.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                    Text(
+                                                        text = "${poke.numeroPokedex} • ${poke.nombre}",
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 16.sp,
+                                                        color = Color(0xFF1E293B)
+                                                    )
+                                                    Text("Tipo: ${poke.tipo}", fontSize = 12.sp, color = Color(0xFF334155))
+                                                    Text("Sexo: ${poke.sexo}", fontSize = 12.sp, color = Color(0xFF334155))
+                                                    Text("Altura: ${poke.altura}  |  Peso: ${poke.peso}", fontSize = 12.sp, color = Color(0xFF334155))
+                                                }
+                                            }
+                                            HorizontalDivider(color = Color(0xFFBFDBFE))
+                                            Text(
+                                                text = poke.descripcion,
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF1E3A8A),
+                                                lineHeight = 16.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
