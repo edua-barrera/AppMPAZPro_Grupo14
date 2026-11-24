@@ -6,8 +6,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cl.duoc.appmpazpro_grupo14.data.local.entity.ProgresoDesafioEntity
+import cl.duoc.appmpazpro_grupo14.data.remote.AvanceRemotoDto
 import cl.duoc.appmpazpro_grupo14.navigation.Screen
 import cl.duoc.appmpazpro_grupo14.viewmodel.MainViewModel
 import cl.duoc.appmpazpro_grupo14.viewmodel.UsuarioViewModel
@@ -30,9 +33,16 @@ fun ResumenScreen(
 ) {
     val estado by usuarioViewModel.estado.collectAsState()
     val historial by usuarioViewModel.historialProgreso.collectAsState()
+    val avancesRemotos by usuarioViewModel.avancesRemotos.collectAsState()
+    val estadoServidor by usuarioViewModel.estadoServidor.collectAsState()
+    val modoDocente by usuarioViewModel.modoDocenteUtp.collectAsState()
 
     var itemAEditar by remember { mutableStateOf<ProgresoDesafioEntity?>(null) }
     var textoObservacion by remember { mutableStateOf("") }
+
+    var remotoAEditar by remember { mutableStateOf<AvanceRemotoDto?>(null) }
+    var textoObsRemota by remember { mutableStateOf("") }
+    var validadoRemoto by remember { mutableStateOf(false) }
 
     var mostrarDialogoAgregar by remember { mutableStateOf(false) }
     val opcionesPredefinidas = listOf(
@@ -46,6 +56,7 @@ fun ResumenScreen(
     var oaInput by remember { mutableStateOf("OA 4") }
     var observacionInput by remember { mutableStateOf("Completado en plataforma") }
     var estadoLogradoInput by remember { mutableStateOf(true) }
+    var validadoDocenteInput by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
@@ -130,6 +141,42 @@ fun ResumenScreen(
 
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = if (modoDocente) Color(0xFFE8F5E9) else Color(0xFFE3F2FD)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (modoDocente) "Perfil: Docente / Jefatura UTP" else "Perfil: Estudiante 3.º Básico",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = if (modoDocente) Color(0xFF1B5E20) else Color(0xFF0D47A1)
+                            )
+                            Text(
+                                text = if (modoDocente)
+                                    "Edición y validación de informe pedagógico habilitada."
+                                else
+                                    "Vista estudiante: lectura de logros y compañeros Pokédex.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF334155)
+                            )
+                        }
+                        Switch(
+                            checked = modoDocente,
+                            onCheckedChange = { usuarioViewModel.alternarModoDocente(it) }
+                        )
+                    }
+                }
+
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
                 ) {
@@ -148,22 +195,25 @@ fun ResumenScreen(
                                 fontSize = 15.sp,
                                 color = Color(0xFF1E293B)
                             )
-                            FilledTonalIconButton(
-                                onClick = {
-                                    asignaturaInput = "Lenguaje y Comunicación"
-                                    oaInput = "OA 4"
-                                    observacionInput = "Completado en plataforma"
-                                    estadoLogradoInput = true
-                                    mostrarDialogoAgregar = true
+                            if (modoDocente) {
+                                FilledTonalIconButton(
+                                    onClick = {
+                                        asignaturaInput = "Lenguaje y Comunicación"
+                                        oaInput = "OA 4"
+                                        observacionInput = "Completado en plataforma"
+                                        estadoLogradoInput = true
+                                        validadoDocenteInput = true
+                                        mostrarDialogoAgregar = true
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "Agregar registro a bitácora")
                                 }
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "Agregar registro a bitácora")
                             }
                         }
 
                         if (historial.isEmpty()) {
                             Text(
-                                text = "Aún no hay desafíos registrados en la base de datos local. Completa un desafío o pulsa '+' para registrar uno.",
+                                text = "Aún no hay desafíos registrados en la base de datos local. Completa un desafío en Asignaturas para ganar tu primer Pokémon.",
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -188,23 +238,132 @@ fun ResumenScreen(
                                                 color = MaterialTheme.colorScheme.primary
                                             )
                                         }
-                                        Text(
-                                            text = "Obs: ${item.observacionDocente}",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF475569)
-                                        )
-                                    }
-                                    Row {
-                                        IconButton(onClick = {
-                                            itemAEditar = item
-                                            textoObservacion = item.observacionDocente
-                                        }) {
-                                            Icon(Icons.Default.Edit, contentDescription = "Editar observación", tint = MaterialTheme.colorScheme.primary)
+                                        if (modoDocente) {
+                                            Text(
+                                                text = "Obs: ${item.observacionDocente}",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF475569)
+                                            )
                                         }
-                                        IconButton(onClick = {
-                                            usuarioViewModel.eliminarProgreso(item)
-                                        }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Eliminar registro", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                    if (modoDocente) {
+                                        Row {
+                                            IconButton(onClick = {
+                                                itemAEditar = item
+                                                textoObservacion = item.observacionDocente
+                                            }) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Editar observación", tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                            IconButton(onClick = {
+                                                usuarioViewModel.eliminarProgreso(item)
+                                            }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Eliminar registro", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (modoDocente) {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.elevatedCardColors(containerColor = Color.White),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Informe Pedagógico UTP (Spring Boot)",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color(0xFF1B5E20)
+                                    )
+                                    Text(
+                                        text = estadoServidor,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF64748B)
+                                    )
+                                }
+                                Row {
+                                    IconButton(onClick = { usuarioViewModel.sincronizarDesdeServidor() }) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Sincronizar GET")
+                                    }
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            asignaturaInput = "Matemática"
+                                            oaInput = "OA 8"
+                                            observacionInput = "Validado por UTP"
+                                            estadoLogradoInput = true
+                                            validadoDocenteInput = true
+                                            mostrarDialogoAgregar = true
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.CloudUpload, contentDescription = "Crear en servidor POST")
+                                    }
+                                }
+                            }
+
+                            if (avancesRemotos.isEmpty()) {
+                                Text(
+                                    text = "Sin registros remotos o servidor sin conexión en puerto 8080.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
+                                )
+                            } else {
+                                avancesRemotos.forEach { remoto ->
+                                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "#${remoto.id} • ${remoto.asignatura} (${remoto.codigoOa})",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = "Alumno: ${remoto.estudiante} • ${remoto.pokemonRecompensa}",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "Obs: ${remoto.observacionDocente}",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF475569)
+                                            )
+                                            Text(
+                                                text = if (remoto.validadoPorDocente) "✔ Validado por Docente UTP" else "⏳ Pendiente de validación",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (remoto.validadoPorDocente) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                            )
+                                        }
+                                        Row {
+                                            IconButton(onClick = {
+                                                remotoAEditar = remoto
+                                                textoObsRemota = remoto.observacionDocente
+                                                validadoRemoto = remoto.validadoPorDocente
+                                            }) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Validar/Editar PUT", tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                            IconButton(onClick = {
+                                                usuarioViewModel.eliminarAvanceEnServidor(remoto.id)
+                                            }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Eliminar DELETE", tint = MaterialTheme.colorScheme.error)
+                                            }
                                         }
                                     }
                                 }
@@ -241,7 +400,7 @@ fun ResumenScreen(
     itemAEditar?.let { item ->
         AlertDialog(
             onDismissRequest = { itemAEditar = null },
-            title = { Text("Editar Observación Docente") },
+            title = { Text("Editar Observación Local (SQLite)") },
             text = {
                 OutlinedTextField(
                     value = textoObservacion,
@@ -260,6 +419,39 @@ fun ResumenScreen(
             },
             dismissButton = {
                 TextButton(onClick = { itemAEditar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    remotoAEditar?.let { remoto ->
+        AlertDialog(
+            onDismissRequest = { remotoAEditar = null },
+            title = { Text("Validar Informe en Servidor (PUT)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = textoObsRemota,
+                        onValueChange = { textoObsRemota = it },
+                        label = { Text("Observación UTP") }
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = validadoRemoto, onCheckedChange = { validadoRemoto = it })
+                        Text("Validado por Docente UTP", fontSize = 13.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    usuarioViewModel.actualizarAvanceEnServidor(remoto, textoObsRemota, validadoRemoto)
+                    remotoAEditar = null
+                }) {
+                    Text("Actualizar en Servidor")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { remotoAEditar = null }) {
                     Text("Cancelar")
                 }
             }
@@ -317,24 +509,39 @@ fun ResumenScreen(
                         )
                         Text("Objetivo logrado ✅", fontSize = 13.sp)
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = validadoDocenteInput,
+                            onCheckedChange = { validadoDocenteInput = it }
+                        )
+                        Text("Validado profesionalmente UTP", fontSize = 13.sp)
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         if (asignaturaInput.isNotBlank() && oaInput.isNotBlank()) {
+                            val obsFinal = observacionInput.trim().ifBlank { "Completado en plataforma" }
                             usuarioViewModel.registrarProgreso(
                                 asignatura = asignaturaInput.trim(),
                                 codigoOa = oaInput.trim(),
                                 acertado = estadoLogradoInput,
                                 usoModoRepaso = !estadoLogradoInput,
-                                observacionDocente = observacionInput.trim().ifBlank { "Completado en plataforma" }
+                                observacionDocente = obsFinal
+                            )
+                            usuarioViewModel.crearAvanceEnServidor(
+                                asignatura = asignaturaInput.trim(),
+                                codigoOa = oaInput.trim(),
+                                observacion = obsFinal,
+                                acertado = estadoLogradoInput,
+                                validado = validadoDocenteInput
                             )
                             mostrarDialogoAgregar = false
                         }
                     }
                 ) {
-                    Text("Guardar en SQLite")
+                    Text("Guardar y Enviar")
                 }
             },
             dismissButton = {

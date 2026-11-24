@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import cl.duoc.appmpazpro_grupo14.data.local.AppDatabase
 import cl.duoc.appmpazpro_grupo14.data.local.entity.ProgresoDesafioEntity
 import cl.duoc.appmpazpro_grupo14.data.local.entity.UsuarioEntity
+import cl.duoc.appmpazpro_grupo14.data.remote.AvanceRemotoDto
+import cl.duoc.appmpazpro_grupo14.data.remote.BackendClient
 import cl.duoc.appmpazpro_grupo14.model.UsuarioErrores
 import cl.duoc.appmpazpro_grupo14.model.UsuarioUiState
 import kotlinx.coroutines.flow.*
@@ -32,8 +34,23 @@ class UsuarioViewModel(application: Application) : AndroidViewModel(application)
         progresoDao.obtenerTodosLosProgresos()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _avancesRemotos = MutableStateFlow<List<AvanceRemotoDto>>(emptyList())
+    val avancesRemotos: StateFlow<List<AvanceRemotoDto>> = _avancesRemotos.asStateFlow()
+
+    private val _estadoServidor = MutableStateFlow("Listo para sincronizar con UTP")
+    val estadoServidor: StateFlow<String> = _estadoServidor.asStateFlow()
+
+    private val _modoDocenteUtp = MutableStateFlow(false)
+    val modoDocenteUtp: StateFlow<Boolean> = _modoDocenteUtp.asStateFlow()
+
     init {
         cargarUsuarioDesdeSQLite()
+        sincronizarDesdeServidor()
+    }
+
+    fun alternarModoDocente(activado: Boolean) {
+        _modoDocenteUtp.value = activado
+        if (activado) sincronizarDesdeServidor()
     }
 
     private fun cargarUsuarioDesdeSQLite() {
@@ -103,6 +120,7 @@ class UsuarioViewModel(application: Application) : AndroidViewModel(application)
 
     fun cerrarSesion() {
         _sesionActiva.value = false
+        _modoDocenteUtp.value = false
         _errorLogin.value = null
         _estado.value = UsuarioUiState()
     }
@@ -159,6 +177,23 @@ class UsuarioViewModel(application: Application) : AndroidViewModel(application)
                     observacionDocente = observacionDocente
                 )
             )
+            val estudianteNombre = _estado.value.nombre.ifBlank { "Estudiante 3.º Básico" }
+            try {
+                BackendClient.api.crearAvance(
+                    AvanceRemotoDto(
+                        estudiante = estudianteNombre,
+                        asignatura = asignatura,
+                        codigoOa = codigoOa,
+                        acertado = acertado,
+                        pokemonRecompensa = pokemonRecompensa.ifBlank { "Sin recompensa" },
+                        observacionDocente = observacionDocente,
+                        validadoPorDocente = false
+                    )
+                )
+                sincronizarDesdeServidor()
+            } catch (_: Exception) {
+                _estadoServidor.value = "Guardado en SQLite (Servidor UTP desconectado)"
+            }
         }
     }
 
@@ -171,6 +206,77 @@ class UsuarioViewModel(application: Application) : AndroidViewModel(application)
     fun eliminarProgreso(item: ProgresoDesafioEntity) {
         viewModelScope.launch {
             progresoDao.eliminarProgreso(item)
+        }
+    }
+
+    fun sincronizarDesdeServidor() {
+        viewModelScope.launch {
+            _estadoServidor.value = "Consultando servidor UTP..."
+            try {
+                val lista = BackendClient.api.obtenerAvances()
+                _avancesRemotos.value = lista
+                _estadoServidor.value = "Conectado (${lista.size} registros en Spring Boot)"
+            } catch (e: Exception) {
+                _estadoServidor.value = "Sin conexión al backend (puerto 8080)"
+            }
+        }
+    }
+
+    fun crearAvanceEnServidor(
+        asignatura: String,
+        codigoOa: String,
+        observacion: String,
+        acertado: Boolean,
+        validado: Boolean
+    ) {
+        viewModelScope.launch {
+            try {
+                val estudiante = _estado.value.nombre.ifBlank { "Eduardo Barrera" }
+                BackendClient.api.crearAvance(
+                    AvanceRemotoDto(
+                        estudiante = estudiante,
+                        asignatura = asignatura,
+                        codigoOa = codigoOa,
+                        acertado = acertado,
+                        pokemonRecompensa = "Registro UTP",
+                        observacionDocente = observacion,
+                        validadoPorDocente = validado
+                    )
+                )
+                sincronizarDesdeServidor()
+            } catch (e: Exception) {
+                _estadoServidor.value = "Error POST: ${e.message}"
+            }
+        }
+    }
+
+    fun actualizarAvanceEnServidor(avance: AvanceRemotoDto, nuevaObs: String, validado: Boolean) {
+        val id = avance.id ?: return
+        viewModelScope.launch {
+            try {
+                BackendClient.api.actualizarAvance(
+                    id,
+                    avance.copy(
+                        observacionDocente = nuevaObs,
+                        validadoPorDocente = validado
+                    )
+                )
+                sincronizarDesdeServidor()
+            } catch (e: Exception) {
+                _estadoServidor.value = "Error PUT: ${e.message}"
+            }
+        }
+    }
+
+    fun eliminarAvanceEnServidor(id: Long?) {
+        if (id == null) return
+        viewModelScope.launch {
+            try {
+                BackendClient.api.eliminarAvance(id)
+                sincronizarDesdeServidor()
+            } catch (e: Exception) {
+                _estadoServidor.value = "Error DELETE: ${e.message}"
+            }
         }
     }
 }
